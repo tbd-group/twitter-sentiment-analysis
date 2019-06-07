@@ -37,3 +37,8 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+//dataset/kaggle-*.csv
+
+/env/**
+/target/**

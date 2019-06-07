@@ -1,0 +1,19 @@
+;; ~*~ clojure ~*~
+
+(require '[clojure.java.io :as io])
+
+(import '[java.io FileInputStream]
+        '[org.antlr.v4.runtime CommonTokenFactory UnbufferedCharStream UnbufferedTokenStream]
+        '[sentient CSVTranslatorLexer CSVTranslatorParser])
+
+(let [[_ source-csv dest-csv] *command-line-args*
+      input-stream (FileInputStream. source-csv)
+      input (UnbufferedCharStream. input-stream)
+      lexer (doto (CSVTranslatorLexer. input)
+              (.setTokenFactory (CommonTokenFactory. true)))
+      tokens (UnbufferedTokenStream. lexer)
+      parser (doto (CSVTranslatorParser. tokens)
+               (.setBuildParseTree false))]
+  (with-open [output (io/writer dest-csv)]
+    (.output parser output)
+    (.csvFile parser)))

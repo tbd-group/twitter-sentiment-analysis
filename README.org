@@ -1,0 +1,15 @@
+#+STARTUP: showeverything
+
+#+NAME: parser-generation
+#+BEGIN_SRC sh
+  pushd src/java
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o sentient CSVTranslator.g4
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o sentient CSVDatasetSplitter.g4
+  popd
+#+END_SRC
+
+#+NAME: splitting-training-testing-datasets
+#+BEGIN_SRC sh
+  lein exec -p bin/translate-kaggle-sentiment140 dataset/kaggle-sentiment140.csv dataset/kaggle-sentiment140-translated.csv
+  lein exec -p bin/split-training-testing-sets dataset/kaggle-sentiment140-translated.csv dataset/kaggle-sentiment140-training.csv dataset/kaggle-sentiment140-testing.csv
+#+END_SRC

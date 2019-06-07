@@ -1,0 +1,30 @@
+(with-open [writer (make-writer "test.txt")]
+(.write writer "foo")
+(.newline writer))
+(require '[clojure.io :refer [make-writer]])
+make-writer
+(require '[clojure.java.io :refer [make-writer]])
+(with-open [writer (make-writer "test.txt")]
+(.write writer "foo")
+(.newline writer))
+(import [java.io File])
+File
+(with-open [writer (make-writer (File. "test.txt"))]
+(.write writer "foo")
+(.newline writer))
+(import [clojure.java.io :as io])
+(import '[clojure.java.io :as io])
+io
+(import '[clojure.java.io])
+(require [clojure.java.io :as io])
+(import '[clojure.java.io :as io])
+(require '[clojure.java.io :as io])
+(with-open [writer (io/writer "test.txt")]
+(.write writer "foo")
+(.newline writer))
+(with-open [writer (io/writer "test.txt")]
+(.write writer "foo")
+(.newLine writer))
+(let [(_ b c) '(1 2 3)] (println b c))
+(let [[_ b c] '(1 2 3)] (println b c))
+(require [clojure.java.io :as io])
