@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package sentient;
+
+option java_package = "sentient";
+option java_outer_classname = "TwitterProtos";
+
+message LabeledTweet {
+  uint32 sentiment = 1;
+  string tweetId   = 2;
+  string text      = 3;
+}

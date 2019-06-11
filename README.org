@@ -2,9 +2,10 @@
 
 #+NAME: parser-generation
 #+BEGIN_SRC sh
-  pushd src/java
-  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o sentient CSVTranslator.g4
-  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o sentient CSVDatasetSplitter.g4
+  pushd src/antlr
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ../java/sentient CSVTranslator.g4
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ../java/sentient CSVDatasetSplitter.g4
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ../java/sentient CSVStream.g4
   popd
 #+END_SRC
 
@@ -12,4 +13,21 @@
 #+BEGIN_SRC sh
   lein exec -p bin/translate-kaggle-sentiment140 dataset/kaggle-sentiment140.csv dataset/kaggle-sentiment140-translated.csv
   lein exec -p bin/split-training-testing-sets dataset/kaggle-sentiment140-translated.csv dataset/kaggle-sentiment140-training.csv dataset/kaggle-sentiment140-testing.csv
+#+END_SRC
+
+#+NAME: compiling-protobuf
+#+BEGIN_SRC sh
+  pushd src/protobuf
+  protoc -I$PWD --python_out=../python/sentient twitter.proto
+  protoc -I$PWD --java_out=../java twitter.proto
+  popd
+#+END_SRC
+
+#+NAME: preprocessing-datasets
+#+BEGIN_SRC sh
+  lein exec -p bin/parse-csv dataset/kaggle-sentiment140-training.csv  # execute from one terminal window
+  python code/preprocess.py dataset/kaggle-sentiment140-training.csv   # execute from another terminal window
+
+  lein exec -p bin/parse-csv dataset/kaggle-sentiment140-testing.csv  # execute from one terminal window
+  python code/preprocess.py dataset/kaggle-sentiment140-testing.csv   # execute from another terminal window
 #+END_SRC
