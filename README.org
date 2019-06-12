@@ -2,11 +2,9 @@
 
 #+NAME: parser-generation
 #+BEGIN_SRC sh
-  pushd src/antlr
-  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ../java/sentient CSVTranslator.g4
-  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ../java/sentient CSVDatasetSplitter.g4
-  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ../java/sentient CSVStream.g4
-  popd
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ./src/java/sentient ./src/antlr/CSVTranslator.g4
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ./src/java/sentient ./src/antlr/CSVDatasetSplitter.g4
+  antlr4 -Dlanguage=Java -no-listener -no-visitor -package sentient -o ./src/java/sentient ./src/antlr/CSVStream.g4
 #+END_SRC
 
 #+NAME: splitting-training-testing-datasets
@@ -23,9 +21,7 @@
 
 #+NAME: preprocessing-datasets
 #+BEGIN_SRC sh
-  lein exec -p bin/parse-csv dataset/kaggle-sentiment140-training.csv  # execute from one terminal window
-  python code/preprocess.py dataset/kaggle-sentiment140-training.csv   # execute from another terminal window
-
-  lein exec -p bin/parse-csv dataset/kaggle-sentiment140-testing.csv  # execute from one terminal window
-  python code/preprocess.py dataset/kaggle-sentiment140-testing.csv   # execute from another terminal window
+  lein exec -p bin/csv-parser # starts the CSV parser service (note the $SERVICE_PORT printed to the terminal)
+  python code/preprocess.py dataset/kaggle-sentiment140-training.csv $SERVICE_PORT
+  python code/preprocess.py dataset/kaggle-sentiment140-testing.csv $SERVICE_PORT
 #+END_SRC

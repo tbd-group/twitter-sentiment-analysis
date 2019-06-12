@@ -33,6 +33,7 @@ grammar CSVStream;
 
     import org.apache.commons.text.StringEscapeUtils;
 
+    import lombok.Getter;
     import lombok.Setter;
 
     import sentient.CSVProtos;
@@ -45,6 +46,9 @@ grammar CSVStream;
     @Setter
     private ZMQ.Socket inputSocket;
 
+    @Getter
+    private int numRows = 0;
+
     private CSVProtos.Row.Builder builder = CSVProtos.Row.newBuilder();
 }
 
@@ -56,9 +60,11 @@ csvFile: hdr row+ EOF {
 
 hdr : row ;
 
-row : {builder.clear();} field (',' field)* '\r'? '\n' {
+row : field (',' field)* '\r'? '\n' {
     CSVProtos.Row row = builder.build();
     outputSocket.send(row.toByteArray(), 0);
+    builder.clear();
+    numRows += 1;
 };
 
 field locals [String value]:

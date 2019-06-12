@@ -1,10 +1,11 @@
+import itertools
 import re
 import sys
 
 import zmq
 from nltk.stem.porter import PorterStemmer
 
-import sentient.twitter_pb2 as twitter_pb2
+import sentient.csv_pb2 as csv_pb2
 from utils import write_status
 
 
@@ -72,38 +73,60 @@ def preprocess_tweet(tweet):
     return ' '.join(processed_tweet)
 
 
-def preprocess_csv(csv_file_name, processed_file_name, test_file=False):
+def parse_csv(csv_file_name, processed_file_name, service_port):
+    context = zmq.Context()
+    service_socket = context.socket(zmq.REQ)
+    service_socket.connect(f"tcp://127.0.0.1:{service_port}")
+    output_socket = context.socket(zmq.PUSH)
+    output_port = output_socket.bind_to_random_port("tcp://127.0.0.1")
+    request = csv_pb2.ParseCsvRequest()
+    request.csvPath = csv_file_name
+    request.outputPort = output_port
+    request = request.SerializeToString()
+    service_socket.send(request, 0)
+    response = service_socket.recv(0)
+    response = csv_pb2.ParseCsvResponse.FromString(response)
+    input_port = response.outputPort
+    input_socket = context.socket(zmq.PULL)
+    input_socket.connect(f"tcp://127.0.0.1:{input_port}")
+    print(f"Parsing CSV [{csv_file_name}] on port [{input_port}] ...")
+    for num_tweets in itertools.count():
+        message = input_socket.recv(0)
+        if len(message) == 0:
+            break
+        yield csv_pb2.Row.FromString(message)
+    print(f'Saved [{num_tweets}] processed tweets to [{processed_file_name}]')
+    output_socket.send(b'')
+    input_socket.close()
+    output_socket.close()
+    service_socket.close()
+
+
+def preprocess_csv(csv_file_name, processed_file_name, service_port, test_file=False):
     with open(processed_file_name, 'w') as save_to_file:
-        context = zmq.Context()
-        outgoing = context.socket(zmq.PUSH)
-        outgoing.bind("tcp://127.0.0.1:5556")
-        incoming = context.socket(zmq.PULL)
-        incoming.connect("tcp://127.0.0.1:5555")
-        while True:
-            message = incoming.recv(0)
-            if len(message) == 0:
-                break
-            tweet = twitter_pb2.LabeledTweet.FromString(message)
-            processed_text = preprocess_tweet(tweet.text)
+        for row in parse_csv(csv_file_name, processed_file_name, service_port):
+            sentiment = int(row.field[0])
+            tweet_id = row.field[1]
+            text = row.field[2]
+            processed_text = preprocess_tweet(text)
             if not test_file:
                 save_to_file.write('%s,%d,%s\n' %
-                                (tweet.tweetId, tweet.sentiment, processed_text))
+                                (tweet_id, sentiment, processed_text))
             else:
                 save_to_file.write('%s,%s\n' %
-                                (tweet.tweetId, processed_text))
-        outgoing.send(b'')
-    print('\nSaved processed tweets to: %s' % processed_file_name)
+                                (tweet_id, processed_text))
     return processed_file_name
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: python preprocess.py <raw-CSV>')
+    if len(sys.argv) != 3:
+        print('Usage: python preprocess.py <raw-CSV> <service-port>')
         exit()
     use_stemmer = False
     csv_file_name = sys.argv[1]
+    service_port = int(sys.argv[2])
     processed_file_name = sys.argv[1][:-4] + '-processed.csv'
     if use_stemmer:
         porter_stemmer = PorterStemmer()
         processed_file_name = sys.argv[1][:-4] + '-processed-stemmed.csv'
-    preprocess_csv(csv_file_name, processed_file_name, test_file=False)
+    preprocess_csv(csv_file_name, processed_file_name, service_port, test_file=False)
