@@ -35,7 +35,7 @@ grammar CSVStream;
 
     import lombok.Setter;
 
-    import sentient.CSVProtos;;
+    import sentient.CSVProtos;
 }
 
 @parser::members {

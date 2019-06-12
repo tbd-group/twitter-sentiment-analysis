@@ -31,7 +31,7 @@
   Runnable
   (run [this]
     (with-open-all [input-socket (doto (.createSocket context SocketType/PULL)
-                                   (.connect input-socket (.getOutputPort request)))
+                                   (.connect (.getOutputPort request)))
                     output-socket (.createSocket context SocketType/PUSH)]
       (let [output-port (.bindToRandomPort output-socket "tcp://127.0.0.1")
             csv-path (.getCsvPath requesta)
