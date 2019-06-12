@@ -17,10 +17,8 @@
 
 #+NAME: compiling-protobuf
 #+BEGIN_SRC sh
-  pushd src/protobuf
-  protoc -I$PWD --python_out=../python/sentient twitter.proto
-  protoc -I$PWD --java_out=../java twitter.proto
-  popd
+  protoc -I./src/protobuf --python_out=./src/python/sentient csv.proto
+  protoc -I./src/protobuf --java_out=./src/java csv.proto
 #+END_SRC
 
 #+NAME: preprocessing-datasets

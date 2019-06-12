@@ -1,0 +1,67 @@
+;; ~*~ clojure ~*~
+
+(import '[java.io FileInputStream]
+        '[java.nio ByteBuffer]
+        '[java.util.concurrent Executors ExecutorService TimeUnit]
+        '[org.zeromq SocketType ZMQ ZContext]
+        '[org.antlr.v4.runtime CommonTokenFactory UnbufferedCharStream UnbufferedTokenStream]
+        '[sentient CSVStreamLexer CSVStreamParser CSVProtos])
+
+(defmacro while-not [test & body]
+  `(while (not ~test)
+     ~@body))
+
+(defmacro with-open-all [bindings & body]
+  (if (seq bindings)
+    (let [binding (vec (take 2 bindings))
+          bindings (drop 2 bindings)]
+      `(with-open ~binding
+         (with-open-all ~bindings ~@body)))
+    `(do ~@body)))
+
+(defmacro close-all-after [closeables & body]
+  (if-let [closeable (first closeables)]
+    `(try
+       (close-after ~(rest closeables) ~@body)
+       (finally
+         (.close ~closeable)))
+    `(do ~@body)))
+
+(deftype CSVStreamWorker [context request]
+  Runnable
+  (run [this]
+    (with-open-all [input-socket (doto (.createSocket context SocketType/PULL)
+                                   (.connect input-socket (.getOutputPort request)))
+                    output-socket (.createSocket context SocketType/PUSH)]
+      (let [output-port (.bindToRandomPort output-socket "tcp://127.0.0.1")
+            csv-path (.getCsvPath requesta)
+            input-stream (FileInputStream. csv-path)
+            input (UnbufferedCharStream. input-stream)
+            lexer (doto (CSVStreamLexer. input)
+                    (.setTokenFactory (CommonTokenFactory. true)))
+            tokens (UnbufferedTokenStream. lexer)
+            parser (doto (CSVStreamParser. tokens)
+                     (.setBuildParseTree false)
+                     (.outputSocket output-socket)
+                     (.inputSocket input-socket))
+            response (.. CSVProtos/ParseCsvResponse
+                         (newBuilder)
+                         (setOutputPort output-port)
+                         (build)
+                         (toByteArray))]
+        (.send server-socket response 0)
+        (.csvFile parser)))))
+
+(with-open-all [context (ZContext.)
+                server-socket (.createSocket context SocketType/REP)]
+  (.bind server-socket "tcp://127.0.0.1:8000")
+  (let [worker-pool (Executors/newCachedThreadPool)]
+    (try
+      (while-not (.isInterrupted (Thread/currentThread))
+        (let [request (.parseFrom CSVProtos/ParseCsvRequest (.recv server-socket 0))
+              worker (CSVStreamWorker. context request)]
+          (.execute worker-pool worker)))
+      (finally
+        (.shutdownNow worker-pool)
+        (when-not (.awaitTermination worker-pool 60 TimeUnit/SECONDS)
+          (.println *err* "Worker pool failed to terminate in a timely fashion."))))))

@@ -31,51 +31,41 @@ grammar CSVStream;
 @parser::header {
     import org.zeromq.ZMQ;
 
-    import lombok.Setter;
-    import lombok.SneakyThrows;
+    import org.apache.commons.text.StringEscapeUtils;
 
-    import sentient.TwitterProtos;
+    import lombok.Setter;
+
+    import sentient.CSVProtos;;
 }
 
 @parser::members {
     @Setter
-    private ZMQ.Socket outgoing;
+    private ZMQ.Socket outputSocket;
 
     @Setter
-    private ZMQ.Socket incoming;
+    private ZMQ.Socket inputSocket;
 
-    @SneakyThrows
-    private void emit(int sentiment, String tweetId, String text) {
-        TwitterProtos.LabeledTweet tweet = TwitterProtos.LabeledTweet.newBuilder()
-            .setSentiment(sentiment)
-            .setTweetId(tweetId)
-            .setText(text)
-            .build();
-        outgoing.send(tweet.toByteArray(), 0);
-    }
+    private CSVProtos.Row.Builder builder = CSVProtos.Row.newBuilder();
 }
 
-csvFile: hdr row+ {
-    outgoing.send(new byte[0], 0);
-    incoming.recv(0); // sentinel
+csvFile: hdr row+ EOF {
+    outputSocket.send(new byte[0], 0);  // send EOF
+    inputSocket.recv(0);  // receive acknowledgment
 }
 ;
 
 hdr : row ;
 
-row : fields+=field (',' fields+=field)* '\r'? '\n' {
-    int sentiment = Integer.parseInt($fields.get(0).value);
-    String tweetId = $fields.get(1).value;
-    String text = $fields.get(2).value;
-    emit(sentiment, tweetId, text);
-}
-;
+row : {builder.clear();} field (',' field)* '\r'? '\n' {
+    CSVProtos.Row row = builder.build();
+    outputSocket.send(row.toByteArray(), 0);
+};
 
-field returns [String value]
-    : unquoted=TEXT {$value = $unquoted.text;}
-    | quoted=STRING {$value = $quoted.text;}
-    | {$value = "";}
-    ;
+field locals [String value]:
+  ( unquoted=TEXT {$value = $unquoted.text;}
+  | quoted=STRING {$value = StringEscapeUtils.unescapeCsv($quoted.text);}
+  | /* ϵ */ {$value = "";}
+  ) {builder.addField($value);};
 
 TEXT   : ~[,\n\r"]+ ;
 STRING : '"' ('""'|~'"')* '"' ; // quote-quote is an escaped quote

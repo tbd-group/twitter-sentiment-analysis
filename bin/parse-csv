@@ -14,11 +14,11 @@
       parser (doto (CSVStreamParser. tokens)
                (.setBuildParseTree false))]
   (with-open [context (ZContext.)]
-    (with-open [outgoing (.createSocket context SocketType/PUSH)]
-      (.bind outgoing "tcp://127.0.0.1:5555")
-      (with-open [incoming (.createSocket context SocketType/PULL)]
-        (.connect incoming "tcp://127.0.0.1:5556")
+    (with-open [output-socket (.createSocket context SocketType/PUSH)]
+      (.bind output-socket "tcp://127.0.0.1:5555")
+      (with-open [input-socket (.createSocket context SocketType/PULL)]
+        (.connect input-socket "tcp://127.0.0.1:5556")
         (doto parser
-          (.outgoing outgoing)
-          (.incoming incoming))
+          (.outputSocket output-socket)
+          (.inputSocket input-socket))
         (.csvFile parser)))))

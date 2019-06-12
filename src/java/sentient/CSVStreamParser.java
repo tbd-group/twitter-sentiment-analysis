@@ -3,10 +3,11 @@ package sentient;
 
     import org.zeromq.ZMQ;
 
-    import lombok.Setter;
-    import lombok.SneakyThrows;
+    import org.apache.commons.text.StringEscapeUtils;
 
-    import sentient.TwitterProtos;
+    import lombok.Setter;
+
+    import sentient.CSVProtos;;
 
 import org.antlr.v4.runtime.atn.*;
 import org.antlr.v4.runtime.dfa.DFA;
@@ -94,20 +95,12 @@ public class CSVStreamParser extends Parser {
 
 
 	    @Setter
-	    private ZMQ.Socket outgoing;
+	    private ZMQ.Socket outputSocket;
 
 	    @Setter
-	    private ZMQ.Socket incoming;
+	    private ZMQ.Socket inputSocket;
 
-	    @SneakyThrows
-	    private void emit(int sentiment, String tweetId, String text) {
-	        TwitterProtos.LabeledTweet tweet = TwitterProtos.LabeledTweet.newBuilder()
-	            .setSentiment(sentiment)
-	            .setTweetId(tweetId)
-	            .setText(text)
-	            .build();
-	        outgoing.send(tweet.toByteArray(), 0);
-	    }
+	    private CSVProtos.Row.Builder builder = CSVProtos.Row.newBuilder();
 
 	public CSVStreamParser(TokenStream input) {
 		super(input);
@@ -118,6 +111,7 @@ public class CSVStreamParser extends Parser {
 		public HdrContext hdr() {
 			return getRuleContext(HdrContext.class,0);
 		}
+		public TerminalNode EOF() { return getToken(CSVStreamParser.EOF, 0); }
 		public List<RowContext> row() {
 			return getRuleContexts(RowContext.class);
 		}
@@ -153,9 +147,11 @@ public class CSVStreamParser extends Parser {
 				_errHandler.sync(this);
 				_la = _input.LA(1);
 			} while ( (((_la) & ~0x3f) == 0 && ((1L << _la) & ((1L << T__0) | (1L << T__1) | (1L << T__2) | (1L << TEXT) | (1L << STRING))) != 0) );
+			setState(14);
+			match(EOF);
 
-			    outgoing.send(new byte[0], 0);
-			    incoming.recv(0); // sentinel
+			    outputSocket.send(new byte[0], 0);  // send sentinel
+			    inputSocket.recv(0); // receive sentinel
 
 			}
 		}
@@ -186,7 +182,7 @@ public class CSVStreamParser extends Parser {
 		try {
 			enterOuterAlt(_localctx, 1);
 			{
-			setState(16);
+			setState(17);
 			row();
 			}
 		}
@@ -202,8 +198,6 @@ public class CSVStreamParser extends Parser {
 	}
 
 	public static class RowContext extends ParserRuleContext {
-		public FieldContext field;
-		public List<FieldContext> fields = new ArrayList<FieldContext>();
 		public List<FieldContext> field() {
 			return getRuleContexts(FieldContext.class);
 		}
@@ -223,43 +217,40 @@ public class CSVStreamParser extends Parser {
 		try {
 			enterOuterAlt(_localctx, 1);
 			{
-			setState(18);
-			((RowContext)_localctx).field = field();
-			((RowContext)_localctx).fields.add(((RowContext)_localctx).field);
-			setState(23);
+			builder.clear();
+			setState(20);
+			field();
+			setState(25);
 			_errHandler.sync(this);
 			_la = _input.LA(1);
 			while (_la==T__0) {
 				{
 				{
-				setState(19);
+				setState(21);
 				match(T__0);
-				setState(20);
-				((RowContext)_localctx).field = field();
-				((RowContext)_localctx).fields.add(((RowContext)_localctx).field);
+				setState(22);
+				field();
 				}
 				}
-				setState(25);
+				setState(27);
 				_errHandler.sync(this);
 				_la = _input.LA(1);
 			}
-			setState(27);
+			setState(29);
 			_errHandler.sync(this);
 			_la = _input.LA(1);
 			if (_la==T__1) {
 				{
-				setState(26);
+				setState(28);
 				match(T__1);
 				}
 			}
 
-			setState(29);
+			setState(31);
 			match(T__2);
 
-			    int sentiment = Integer.parseInt(((RowContext)_localctx).fields.get(0).value);
-			    String tweetId = ((RowContext)_localctx).fields.get(1).value;
-			    String text = ((RowContext)_localctx).fields.get(2).value;
-			    emit(sentiment, tweetId, text);
+			    CSVProtos.Row row = builder.build();
+			    outputSocket.send(row.toByteArray(), 0);
 
 			}
 		}
@@ -290,35 +281,36 @@ public class CSVStreamParser extends Parser {
 		FieldContext _localctx = new FieldContext(_ctx, getState());
 		enterRule(_localctx, 6, RULE_field);
 		try {
-			setState(37);
+			enterOuterAlt(_localctx, 1);
+			{
+			setState(39);
 			_errHandler.sync(this);
 			switch (_input.LA(1)) {
 			case TEXT:
-				enterOuterAlt(_localctx, 1);
 				{
-				setState(32);
+				setState(34);
 				((FieldContext)_localctx).unquoted = match(TEXT);
 				((FieldContext)_localctx).value =  (((FieldContext)_localctx).unquoted!=null?((FieldContext)_localctx).unquoted.getText():null);
 				}
 				break;
 			case STRING:
-				enterOuterAlt(_localctx, 2);
 				{
-				setState(34);
+				setState(36);
 				((FieldContext)_localctx).quoted = match(STRING);
-				((FieldContext)_localctx).value =  (((FieldContext)_localctx).quoted!=null?((FieldContext)_localctx).quoted.getText():null);
+				((FieldContext)_localctx).value =  StringEscapeUtils.unescapeCsv((((FieldContext)_localctx).quoted!=null?((FieldContext)_localctx).quoted.getText():null));
 				}
 				break;
 			case T__0:
 			case T__1:
 			case T__2:
-				enterOuterAlt(_localctx, 3);
 				{
 				((FieldContext)_localctx).value =  "";
 				}
 				break;
 			default:
 				throw new NoViableAltException(this);
+			}
+			builder.addField(_localctx.value);
 			}
 		}
 		catch (RecognitionException re) {
@@ -333,18 +325,18 @@ public class CSVStreamParser extends Parser {
 	}
 
 	public static final String _serializedATN =
-		"\3\u608b\ua72a\u8133\ub9ed\u417c\u3be7\u7786\u5964\3\7*\4\2\t\2\4\3\t"+
-		"\3\4\4\t\4\4\5\t\5\3\2\3\2\6\2\r\n\2\r\2\16\2\16\3\2\3\2\3\3\3\3\3\4\3"+
-		"\4\3\4\7\4\30\n\4\f\4\16\4\33\13\4\3\4\5\4\36\n\4\3\4\3\4\3\4\3\5\3\5"+
-		"\3\5\3\5\3\5\5\5(\n\5\3\5\2\2\6\2\4\6\b\2\2\2*\2\n\3\2\2\2\4\22\3\2\2"+
-		"\2\6\24\3\2\2\2\b\'\3\2\2\2\n\f\5\4\3\2\13\r\5\6\4\2\f\13\3\2\2\2\r\16"+
-		"\3\2\2\2\16\f\3\2\2\2\16\17\3\2\2\2\17\20\3\2\2\2\20\21\b\2\1\2\21\3\3"+
-		"\2\2\2\22\23\5\6\4\2\23\5\3\2\2\2\24\31\5\b\5\2\25\26\7\3\2\2\26\30\5"+
-		"\b\5\2\27\25\3\2\2\2\30\33\3\2\2\2\31\27\3\2\2\2\31\32\3\2\2\2\32\35\3"+
-		"\2\2\2\33\31\3\2\2\2\34\36\7\4\2\2\35\34\3\2\2\2\35\36\3\2\2\2\36\37\3"+
-		"\2\2\2\37 \7\5\2\2 !\b\4\1\2!\7\3\2\2\2\"#\7\6\2\2#(\b\5\1\2$%\7\7\2\2"+
-		"%(\b\5\1\2&(\b\5\1\2\'\"\3\2\2\2\'$\3\2\2\2\'&\3\2\2\2(\t\3\2\2\2\6\16"+
-		"\31\35\'";
+		"\3\u608b\ua72a\u8133\ub9ed\u417c\u3be7\u7786\u5964\3\7.\4\2\t\2\4\3\t"+
+		"\3\4\4\t\4\4\5\t\5\3\2\3\2\6\2\r\n\2\r\2\16\2\16\3\2\3\2\3\2\3\3\3\3\3"+
+		"\4\3\4\3\4\3\4\7\4\32\n\4\f\4\16\4\35\13\4\3\4\5\4 \n\4\3\4\3\4\3\4\3"+
+		"\5\3\5\3\5\3\5\3\5\5\5*\n\5\3\5\3\5\3\5\2\2\6\2\4\6\b\2\2\2.\2\n\3\2\2"+
+		"\2\4\23\3\2\2\2\6\25\3\2\2\2\b)\3\2\2\2\n\f\5\4\3\2\13\r\5\6\4\2\f\13"+
+		"\3\2\2\2\r\16\3\2\2\2\16\f\3\2\2\2\16\17\3\2\2\2\17\20\3\2\2\2\20\21\7"+
+		"\2\2\3\21\22\b\2\1\2\22\3\3\2\2\2\23\24\5\6\4\2\24\5\3\2\2\2\25\26\b\4"+
+		"\1\2\26\33\5\b\5\2\27\30\7\3\2\2\30\32\5\b\5\2\31\27\3\2\2\2\32\35\3\2"+
+		"\2\2\33\31\3\2\2\2\33\34\3\2\2\2\34\37\3\2\2\2\35\33\3\2\2\2\36 \7\4\2"+
+		"\2\37\36\3\2\2\2\37 \3\2\2\2 !\3\2\2\2!\"\7\5\2\2\"#\b\4\1\2#\7\3\2\2"+
+		"\2$%\7\6\2\2%*\b\5\1\2&\'\7\7\2\2\'*\b\5\1\2(*\b\5\1\2)$\3\2\2\2)&\3\2"+
+		"\2\2)(\3\2\2\2*+\3\2\2\2+,\b\5\1\2,\t\3\2\2\2\6\16\33\37)";
 	public static final ATN _ATN =
 		new ATNDeserializer().deserialize(_serializedATN.toCharArray());
 	static {
