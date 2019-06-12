@@ -75,3 +75,5 @@
         (if-not (.awaitTermination worker-pool 60 TimeUnit/SECONDS)
           (.println *err* "Worker pool failed to terminate in a timely fashion.")
           (println "Worker pool terminated successfully."))))))
+
+;; vim: set ft=clojure ts=2 sw=2 et sta:
