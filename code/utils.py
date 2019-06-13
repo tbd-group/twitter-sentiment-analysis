@@ -1,3 +1,4 @@
+import gzip
 import itertools
 import pickle
 import random
@@ -5,16 +6,14 @@ import sys
 
 import zmq
 
-import sentient.csv_pb2 as csv_pb2
+from sentient.parse_pb2 import (CsvRow, DictionaryList, ParseFileRequest,
+                                ParseFileResponse)
 
 
-def file_to_wordset(filename):
+def file_to_wordset(file_path, service_port):
     ''' Converts a file with a word per line to a Python set '''
-    words = []
-    with open(filename, 'r') as f:
-        for line in f:
-            words.append(line.strip())
-    return set(words)
+    dictionary_list = parse_dictionary_list(file_path, service_port)
+    return set(dictionary_list.term)
 
 
 def write_status(i, total):
@@ -88,29 +87,50 @@ def split_data(tweets, validation_split=0.1):
     return tweets[:index], tweets[index:]
 
 
-def parse_csv(csv_path, service_port):
+def build_parse_file_request(file_path, file_type, output_port):
+    request = ParseFileRequest()
+    request.filePath = file_path
+    request.fileType = file_type
+    request.outputPort = output_port
+    return request.SerializeToString()
+
+
+def parse_file(file_path, service_port, file_type, generate):
     context = zmq.Context()
     service_socket = context.socket(zmq.REQ)
     service_socket.connect(f"tcp://127.0.0.1:{service_port}")
     output_socket = context.socket(zmq.PUSH)
     output_port = output_socket.bind_to_random_port("tcp://127.0.0.1")
-    request = csv_pb2.ParseCsvRequest()
-    request.csvPath = csv_path
-    request.outputPort = output_port
-    request = request.SerializeToString()
+    request = build_parse_file_request(file_path, file_type, output_port)
     service_socket.send(request, 0)
     response = service_socket.recv(0)
-    response = csv_pb2.ParseCsvResponse.FromString(response)
+    response = ParseFileResponse.FromString(response)
     input_port = response.outputPort
     input_socket = context.socket(zmq.PULL)
     input_socket.connect(f"tcp://127.0.0.1:{input_port}")
-    print(f"Parsing CSV [{csv_path}] on port [{input_port}] ...")
-    while True:
-        message = input_socket.recv(0)
-        if len(message) == 0:
-            break
-        yield csv_pb2.Row.FromString(message)
+    print(f"Parsing file [{file_path}] on port [{input_port}] ...")
+    for value in generate(input_socket):
+        yield value
     output_socket.send(b'')
     input_socket.close()
     output_socket.close()
     service_socket.close()
+
+
+def parse_dictionary_list(dict_path, service_port):
+    def generate(input_socket):
+        message = input_socket.recv(0)
+        message = gzip.decompress(message)
+        yield DictionaryList.FromString(message)
+    return next(parse_file(dict_path, service_port, ParseFileRequest.FileType.DICTIONARY_LIST, generate))
+
+
+def parse_csv(csv_path, service_port):
+    def generate(input_socket):
+        while True:
+            message = input_socket.recv(0)
+            if len(message) == 0:
+                break
+            yield CsvRow.FromString(message)
+    for value in parse_file(csv_path, service_port, ParseFileRequest.FileType.CSV, generate):
+        yield value

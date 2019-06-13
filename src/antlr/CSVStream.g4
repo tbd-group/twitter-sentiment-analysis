@@ -36,7 +36,7 @@ grammar CSVStream;
     import lombok.Getter;
     import lombok.Setter;
 
-    import sentient.CSVProtos;
+    import sentient.ParseProtos;
 }
 
 @parser::members {
@@ -49,8 +49,10 @@ grammar CSVStream;
     @Getter
     private int numRows = 0;
 
-    private CSVProtos.Row.Builder builder = CSVProtos.Row.newBuilder();
+    private ParseProtos.CsvRow.Builder builder = ParseProtos.CsvRow.newBuilder();
 }
+
+parse: csvFile;
 
 csvFile: hdr row+ EOF {
     outputSocket.send(new byte[0], 0);  // send EOF
@@ -61,7 +63,7 @@ csvFile: hdr row+ EOF {
 hdr : row ;
 
 row : field (',' field)* '\r'? '\n' {
-    CSVProtos.Row row = builder.build();
+    ParseProtos.CsvRow row = builder.build();
     outputSocket.send(row.toByteArray(), 0);
     builder.clear();
     numRows += 1;

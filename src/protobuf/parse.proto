@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package sentient;
+
+option java_package = "sentient";
+option java_outer_classname = "ParseProtos";
+
+message ParseFileRequest {
+  enum FileType {
+    CSV = 0;
+    DICTIONARY_LIST = 1;
+  }
+  FileType fileType = 1;
+  string filePath   = 2;
+  uint32 outputPort = 3;
+}
+
+message ParseFileResponse {
+  uint32 outputPort = 1;
+}
+
+message CsvRow {
+  repeated string field = 1;
+}
+
+message DictionaryList {
+  repeated string term = 1;
+}

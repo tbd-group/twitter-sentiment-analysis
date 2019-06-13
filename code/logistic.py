@@ -1,16 +1,20 @@
-from keras.models import Sequential, load_model
-from keras.layers import Dense
-import sys
-import utils
 import random
+import sys
+
 import numpy as np
+from keras.layers import Dense
+from keras.models import Sequential, load_model
+
+import utils
 
 # Performs classification using Logistic Regression.
 
-FREQ_DIST_FILE = '../train-processed-freqdist.pkl'
-BI_FREQ_DIST_FILE = '../train-processed-freqdist-bi.pkl'
-TRAIN_PROCESSED_FILE = '../train-processed.csv'
-TEST_PROCESSED_FILE = '../test-processed.csv'
+FREQ_DIST_FILE = 'train-processed-freqdist.pkl'
+BI_FREQ_DIST_FILE = 'train-processed-freqdist-bi.pkl'
+# TRAIN_PROCESSED_FILE = 'code/train-processed.csv'
+TRAIN_PROCESSED_FILE = 'dataset/kaggle-sentiment140-training.csv'
+# TEST_PROCESSED_FILE = 'code/test-processed.csv'
+TEST_PROCESSED_FILE = 'dataset/kaggle-sentiment140-testing.csv'
 TRAIN = True
 UNIGRAM_SIZE = 15000
 VOCAB_SIZE = UNIGRAM_SIZE

@@ -1,16 +1,18 @@
-import numpy as np
 import sys
-from keras.models import load_model, Model
-import utils
+
+import numpy as np
+from keras.models import Model, load_model
 from keras.preprocessing.sequence import pad_sequences
+
+import utils
 
 # Extracts dense vector features from penultimate layer of CNN model.
 
-FREQ_DIST_FILE = '../train-processed-freqdist.pkl'
-BI_FREQ_DIST_FILE = '../train-processed-freqdist-bi.pkl'
-TRAIN_PROCESSED_FILE = '../train-processed.csv'
-TEST_PROCESSED_FILE = '../test-processed.csv'
-GLOVE_FILE = './dataset/glove-seeds.txt'
+FREQ_DIST_FILE = 'train-processed-freqdist.pkl'
+BI_FREQ_DIST_FILE = 'train-processed-freqdist-bi.pkl'
+TRAIN_PROCESSED_FILE = 'train-processed.csv'
+TEST_PROCESSED_FILE = 'test-processed.csv'
+GLOVE_FILE = 'dataset/glove-seeds.txt'
 dim = 200
 
 

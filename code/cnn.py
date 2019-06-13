@@ -1,19 +1,22 @@
-import numpy as np
 import sys
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout, Activation
-from keras.layers import Embedding, Flatten
-from keras.layers import Conv1D, GlobalMaxPooling1D
+
+import numpy as np
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-import utils
+from keras.layers import (Activation, Conv1D, Dense, Dropout, Embedding,
+                          Flatten, GlobalMaxPooling1D)
+from keras.models import Sequential, load_model
 from keras.preprocessing.sequence import pad_sequences
+
+import utils
 
 # Performs classification using CNN.
 
 FREQ_DIST_FILE = '../train-processed-freqdist.pkl'
 BI_FREQ_DIST_FILE = '../train-processed-freqdist-bi.pkl'
-TRAIN_PROCESSED_FILE = '../train-processed.csv'
-TEST_PROCESSED_FILE = '../test-processed.csv'
+# TRAIN_PROCESSED_FILE = 'code/train-processed.csv'
+TRAIN_PROCESSED_FILE = 'dataset/kaggle-sentiment140-training.csv'
+# TEST_PROCESSED_FILE = 'code/test-processed.csv'
+TEST_PROCESSED_FILE = 'dataset/kaggle-sentiment140-testing.csv'
 GLOVE_FILE = './dataset/glove-seeds.txt'
 dim = 200
 

@@ -1,11 +1,14 @@
-;; ~*~ clojure ~*~
+; ~*~ mode: clojure; ~*~
 
 (import '[java.io FileInputStream]
         '[java.nio ByteBuffer]
         '[java.util.concurrent Executors ExecutorService TimeUnit]
         '[org.zeromq SocketType ZMQ ZContext]
         '[org.antlr.v4.runtime CommonTokenFactory UnbufferedCharStream UnbufferedTokenStream]
-        '[sentient CSVStreamLexer CSVStreamParser CSVProtos$ParseCsvRequest CSVProtos$ParseCsvResponse])
+        '[sentient CSVStreamLexer CSVStreamParser
+          DictionaryListLexer DictionaryListParser
+          ParseProtos$ParseFileRequest ParseProtos$ParseFileResponse
+          ParseProtos$ParseFileRequest$FileType])
 
 (defmacro while-not [test & body]
   `(while (not ~test)
@@ -27,7 +30,23 @@
          (.close ~closeable)))
     `(do ~@body)))
 
-(deftype CSVStreamWorker [context service-socket request]
+(defn ->lexer [file-type input]
+  (doto
+    (condp = file-type
+      ParseProtos$ParseFileRequest$FileType/CSV (CSVStreamLexer. input)
+      ParseProtos$ParseFileRequest$FileType/DICTIONARY_LIST (DictionaryListLexer. input))
+    (.setTokenFactory (CommonTokenFactory. true))))
+
+(defn ->parser [file-type tokens output-socket input-socket]
+  (doto
+    (condp = file-type
+      ParseProtos$ParseFileRequest$FileType/CSV (CSVStreamParser. tokens)
+      ParseProtos$ParseFileRequest$FileType/DICTIONARY_LIST (DictionaryListParser. tokens))
+    (.setBuildParseTree false)
+    (.outputSocket output-socket)
+    (.inputSocket input-socket)))
+
+(deftype ParseFileWorker [context service-socket request]
   Runnable
   (run [this]
     (with-open-all [input-socket (doto (.createSocket context SocketType/PULL)
@@ -35,26 +54,23 @@
                                                      (.getOutputPort request))))
                     output-socket (.createSocket context SocketType/PUSH)]
       (let [output-port (.bindToRandomPort output-socket "tcp://127.0.0.1")
-            csv-path (.getCsvPath request)
-            input-stream (FileInputStream. csv-path)
+            file-path (.getFilePath request)
+            input-stream (FileInputStream. file-path)
             input (UnbufferedCharStream. input-stream)
-            lexer (doto (CSVStreamLexer. input)
-                    (.setTokenFactory (CommonTokenFactory. true)))
+            file-type (.getFileType request)
+            lexer (->lexer file-type input)
             tokens (UnbufferedTokenStream. lexer)
-            parser (doto (CSVStreamParser. tokens)
-                     (.setBuildParseTree false)
-                     (.outputSocket output-socket)
-                     (.inputSocket input-socket))
-            response (.. (CSVProtos$ParseCsvResponse/newBuilder)
+            parser (->parser file-type tokens output-socket input-socket)
+            response (.. (ParseProtos$ParseFileResponse/newBuilder)
                          (setOutputPort output-port)
                          (build)
                          (toByteArray))]
         (.send service-socket response 0)
-        (printf "Parsing CSV [%s] on port [%d]%n" csv-path output-port)
+        (printf "Parsing file [%s] on port [%d]%n" file-path output-port)
         (flush)
-        (.csvFile parser)
-        (printf "Parsed [%d] rows from CSV [%s] on port [%d]%n"
-                (.numRows parser) csv-path output-port)
+        (.parse parser)
+        (printf "Parsed [%d] rows from file [%s] on port [%d]%n"
+                (.numRows parser) file-path output-port)
         (flush)))))
 
 (with-open-all [context (ZContext.)
@@ -65,8 +81,8 @@
     (flush)
     (try
       (while-not (.isInterrupted (Thread/currentThread))
-        (let [request (CSVProtos$ParseCsvRequest/parseFrom (.recv service-socket 0))
-              worker (CSVStreamWorker. context service-socket request)]
+        (let [request (ParseProtos$ParseFileRequest/parseFrom (.recv service-socket 0))
+              worker (ParseFileWorker. context service-socket request)]
           (.execute worker-pool worker)))
       (finally
         (println "Shutting-down worker pool ...")
@@ -76,4 +92,4 @@
           (.println *err* "Worker pool failed to terminate in a timely fashion.")
           (println "Worker pool terminated successfully."))))))
 
-;; vim: set ft=clojure ts=2 sw=2 et sta:
+; vim: set ft=clojure ts=2 sw=2 et sta:

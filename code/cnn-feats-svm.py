@@ -1,17 +1,19 @@
-from sklearn.model_selection import train_test_split
+import pickle
+
+import numpy as np
+from numpy import loadtxt
 from sklearn import svm
 from sklearn.metrics import accuracy_score
-from numpy import loadtxt
-import numpy as np
-import pickle
+from sklearn.model_selection import train_test_split
+
 import utils
 
 # Performs SVM classification on features extracted from penultimate layer of CNN model.
 
 
-TRAIN_FEATURES_FILE = './train-feats.npy'
-TRAIN_LABELS_FILE = './train-labels.txt'
-TEST_FEATURES_FILE = './test-feats.npy'
+TRAIN_FEATURES_FILE = 'code/train-feats.npy'
+TRAIN_LABELS_FILE = 'code/train-labels.txt'
+TEST_FEATURES_FILE = 'code/test-feats.npy'
 CLASSIFIER = 'SVM'
 MODEL_FILE = 'cnn-feats-%s.pkl' % CLASSIFIER
 TRAIN = True
