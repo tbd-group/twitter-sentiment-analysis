@@ -1,12 +1,9 @@
-import itertools
 import re
 import sys
 
-import zmq
 from nltk.stem.porter import PorterStemmer
 
-import sentient.csv_pb2 as csv_pb2
-from utils import write_status
+from utils import parse_csv
 
 
 def preprocess_word(word):
@@ -73,38 +70,9 @@ def preprocess_tweet(tweet):
     return ' '.join(processed_tweet)
 
 
-def parse_csv(csv_file_name, processed_file_name, service_port):
-    context = zmq.Context()
-    service_socket = context.socket(zmq.REQ)
-    service_socket.connect(f"tcp://127.0.0.1:{service_port}")
-    output_socket = context.socket(zmq.PUSH)
-    output_port = output_socket.bind_to_random_port("tcp://127.0.0.1")
-    request = csv_pb2.ParseCsvRequest()
-    request.csvPath = csv_file_name
-    request.outputPort = output_port
-    request = request.SerializeToString()
-    service_socket.send(request, 0)
-    response = service_socket.recv(0)
-    response = csv_pb2.ParseCsvResponse.FromString(response)
-    input_port = response.outputPort
-    input_socket = context.socket(zmq.PULL)
-    input_socket.connect(f"tcp://127.0.0.1:{input_port}")
-    print(f"Parsing CSV [{csv_file_name}] on port [{input_port}] ...")
-    for num_tweets in itertools.count():
-        message = input_socket.recv(0)
-        if len(message) == 0:
-            break
-        yield csv_pb2.Row.FromString(message)
-    print(f'Saved [{num_tweets}] processed tweets to [{processed_file_name}]')
-    output_socket.send(b'')
-    input_socket.close()
-    output_socket.close()
-    service_socket.close()
-
-
 def preprocess_csv(csv_file_name, processed_file_name, service_port, test_file=False):
     with open(processed_file_name, 'w') as save_to_file:
-        for row in parse_csv(csv_file_name, processed_file_name, service_port):
+        for num_tweets, row in enumerate(parse_csv(csv_file_name, service_port)):
             sentiment = int(row.field[0])
             tweet_id = row.field[1]
             text = row.field[2]
@@ -115,6 +83,7 @@ def preprocess_csv(csv_file_name, processed_file_name, service_port, test_file=F
             else:
                 save_to_file.write('%s,%s\n' %
                                 (tweet_id, processed_text))
+    print(f'Saved [{num_tweets}] processed tweets to [{processed_file_name}]')
     return processed_file_name
 
 

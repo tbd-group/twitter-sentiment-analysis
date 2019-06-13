@@ -1,6 +1,11 @@
-import sys
+import itertools
 import pickle
 import random
+import sys
+
+import zmq
+
+import sentient.csv_pb2 as csv_pb2
 
 
 def file_to_wordset(filename):
@@ -81,3 +86,31 @@ def split_data(tweets, validation_split=0.1):
     index = int((1 - validation_split) * len(tweets))
     random.shuffle(tweets)
     return tweets[:index], tweets[index:]
+
+
+def parse_csv(csv_path, service_port):
+    context = zmq.Context()
+    service_socket = context.socket(zmq.REQ)
+    service_socket.connect(f"tcp://127.0.0.1:{service_port}")
+    output_socket = context.socket(zmq.PUSH)
+    output_port = output_socket.bind_to_random_port("tcp://127.0.0.1")
+    request = csv_pb2.ParseCsvRequest()
+    request.csvPath = csv_path
+    request.outputPort = output_port
+    request = request.SerializeToString()
+    service_socket.send(request, 0)
+    response = service_socket.recv(0)
+    response = csv_pb2.ParseCsvResponse.FromString(response)
+    input_port = response.outputPort
+    input_socket = context.socket(zmq.PULL)
+    input_socket.connect(f"tcp://127.0.0.1:{input_port}")
+    print(f"Parsing CSV [{csv_path}] on port [{input_port}] ...")
+    while True:
+        message = input_socket.recv(0)
+        if len(message) == 0:
+            break
+        yield csv_pb2.Row.FromString(message)
+    output_socket.send(b'')
+    input_socket.close()
+    output_socket.close()
+    service_socket.close()
