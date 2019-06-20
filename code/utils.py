@@ -4,10 +4,82 @@ import pickle
 import random
 import sys
 
+import numpy as np
 import zmq
+from scipy.sparse import lil_matrix
+from sklearn.feature_extraction.text import TfidfTransformer
 
 from sentient.parse_pb2 import (CsvRow, DictionaryList, ParseFileRequest,
                                 ParseFileResponse)
+
+TRAIN = True
+UNIGRAM_SIZE = 15000
+VOCAB_SIZE = UNIGRAM_SIZE
+USE_BIGRAMS = True
+if USE_BIGRAMS:
+    BIGRAM_SIZE = 10000
+    VOCAB_SIZE = UNIGRAM_SIZE + BIGRAM_SIZE
+FEAT_TYPE = 'frequency'
+UNIGRAMS = None
+BIGRAMS = None
+
+FREQ_DIST_FILE = './dataset/kaggle-sentiment140-training-processed-freqdist.pkl'
+BI_FREQ_DIST_FILE = './dataset/kaggle-sentiment140-training-processed-freqdist-bi.pkl'
+TRAIN_PROCESSED_FILE = './dataset/kaggle-sentiment140-training-processed.csv'
+TEST_PROCESSED_FILE = './dataset/kaggle-sentiment140-testing-processed.csv'
+# FREQ_DIST_FILE = './dataset/kaggle-sentiment140-training-processed-subset-freqdist.pkl'
+# BI_FREQ_DIST_FILE = './dataset/kaggle-sentiment140-training-processed-subset-freqdist-bi.pkl'
+# TRAIN_PROCESSED_FILE = './dataset/kaggle-sentiment140-training-processed-subset.csv'
+# TEST_PROCESSED_FILE = './dataset/kaggle-sentiment140-testing-processed-subset.csv'
+GLOVE_FILE = './dataset/glove.twitter.27B.200d.txt'
+
+
+def init_unigrams():
+    global UNIGRAMS
+    UNIGRAMS = top_n_words(FREQ_DIST_FILE, UNIGRAM_SIZE)
+
+
+def init_bigrams():
+    global BIGRAMS
+    if USE_BIGRAMS:
+        BIGRAMS = top_n_bigrams(BI_FREQ_DIST_FILE, BIGRAM_SIZE)
+
+
+def init_ngrams():
+    init_unigrams()
+    init_bigrams()
+
+
+def extract_features(tweets, batch_size=500, test_file=True, feat_type='presence', is_sparse=False):
+    num_batches = int(np.ceil(len(tweets) / float(batch_size)))
+    for i in range(num_batches):
+        batch = tweets[i * batch_size: (i + 1) * batch_size]
+        if is_sparse:
+            features = lil_matrix((batch_size, VOCAB_SIZE))
+        else:
+            features = np.zeros((batch_size, VOCAB_SIZE))
+        labels = np.zeros(batch_size)
+        for j, tweet in enumerate(batch):
+            if test_file:
+                tweet_words = tweet[1][0]
+                tweet_bigrams = tweet[1][1]
+            else:
+                tweet_words = tweet[2][0]
+                tweet_bigrams = tweet[2][1]
+                labels[j] = tweet[1]
+            if feat_type == 'presence':
+                tweet_words = set(tweet_words)
+                tweet_bigrams = set(tweet_bigrams)
+            for word in tweet_words:
+                idx = UNIGRAMS.get(word)
+                if idx:
+                    features[j, idx] += 1
+            if USE_BIGRAMS:
+                for bigram in tweet_bigrams:
+                    idx = BIGRAMS.get(bigram)
+                    if idx:
+                        features[j, UNIGRAM_SIZE + idx] += 1
+        yield features, labels
 
 
 def file_to_wordset(file_path, service_port):
@@ -95,19 +167,32 @@ def build_parse_file_request(file_path, file_type, output_port):
     return request.SerializeToString()
 
 
-def parse_file(file_path, service_port, file_type, generate):
-    context = zmq.Context()
-    service_socket = context.socket(zmq.REQ)
-    service_socket.connect(f"tcp://127.0.0.1:{service_port}")
+def build_output_socket(context):
     output_socket = context.socket(zmq.PUSH)
     output_port = output_socket.bind_to_random_port("tcp://127.0.0.1")
-    request = build_parse_file_request(file_path, file_type, output_port)
-    service_socket.send(request, 0)
-    response = service_socket.recv(0)
-    response = ParseFileResponse.FromString(response)
-    input_port = response.outputPort
+    return output_socket, output_port
+
+
+def build_input_socket(context, input_port):
     input_socket = context.socket(zmq.PULL)
     input_socket.connect(f"tcp://127.0.0.1:{input_port}")
+    return input_socket, input_port
+
+
+def build_service_socket(context, service_port):
+    service_socket = context.socket(zmq.REQ)
+    service_socket.connect(f"tcp://127.0.0.1:{service_port}")
+    return service_socket
+
+
+def parse_file(file_path, service_port, file_type, generate):
+    context = zmq.Context()
+    service_socket = build_service_socket(context, service_port)
+    output_socket, output_port = build_output_socket(context)
+    request = build_parse_file_request(file_path, file_type, output_port)
+    service_socket.send(request, 0)
+    response = ParseFileResponse.FromString(service_socket.recv(0))
+    input_socket, input_port = build_input_socket(context, response.outputPort)
     print(f"Parsing file [{file_path}] on port [{input_port}] ...")
     for value in generate(input_socket):
         yield value
@@ -134,3 +219,55 @@ def parse_csv(csv_path, service_port):
             yield CsvRow.FromString(message)
     for value in parse_file(csv_path, service_port, ParseFileRequest.FileType.CSV, generate):
         yield value
+
+
+def get_feature_vector(tweet):
+    uni_feature_vector = []
+    bi_feature_vector = []
+    words = tweet.split()
+    for i in range(len(words) - 1):
+        word = words[i]
+        next_word = words[i + 1]
+        if UNIGRAMS.get(word):
+            uni_feature_vector.append(word)
+        if USE_BIGRAMS:
+            if BIGRAMS.get((word, next_word)):
+                bi_feature_vector.append((word, next_word))
+    if len(words) >= 1:
+        if UNIGRAMS.get(words[-1]):
+            uni_feature_vector.append(words[-1])
+    return uni_feature_vector, bi_feature_vector
+
+
+def apply_tf_idf(X):
+    """
+    Fits X for TF-IDF vectorization and returns the transformer.
+    """
+    transformer = TfidfTransformer(smooth_idf=True, sublinear_tf=True, use_idf=True)
+    transformer.fit(X)
+    return transformer
+
+
+def process_tweets(csv_file, service_port, test_file=True, get_feature_vector=get_feature_vector):
+    """Returns a list of tuples of type (tweet_id, feature_vector)
+            or (tweet_id, sentiment, feature_vector)
+
+    Args:
+        csv_file (str): Name of processed csv file generated by preprocess.py
+        test_file (bool, optional): If processing test file
+
+    Returns:
+        list: Of tuples
+    """
+    tweets = []
+    print('Generating feature vectors')
+    for row in parse_csv(csv_file, service_port):
+        tweet_id = row.field[0]
+        sentiment = row.field[1]
+        tweet = row.field[2]
+        feature_vector = get_feature_vector(tweet)
+        if test_file:
+            tweets.append((tweet_id, feature_vector))
+        else:
+            tweets.append((tweet_id, int(sentiment), feature_vector))
+    return tweets

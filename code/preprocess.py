@@ -1,3 +1,4 @@
+import csv
 import re
 import sys
 
@@ -72,18 +73,17 @@ def preprocess_tweet(tweet):
 
 def preprocess_csv(csv_file_name, processed_file_name, service_port, test_file=False):
     with open(processed_file_name, 'w') as save_to_file:
+        csv_writer = csv.writer(save_to_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         for num_tweets, row in enumerate(parse_csv(csv_file_name, service_port)):
             sentiment = int(row.field[0])
-            tweet_id = row.field[1]
+            tweet_id = row.field[1][1:-1]
             text = row.field[2]
             processed_text = preprocess_tweet(text)
             if not test_file:
-                save_to_file.write('%s,%d,%s\n' %
-                                (tweet_id, sentiment, processed_text))
+                csv_writer.writerow([tweet_id, sentiment, processed_text])
             else:
-                save_to_file.write('%s,%s\n' %
-                                (tweet_id, processed_text))
-    print(f'Saved [{num_tweets}] processed tweets to [{processed_file_name}]')
+                csv_writer.writerow([tweet_id, processed_text])
+    print(f'Saved [{1+num_tweets}] processed tweets to [{processed_file_name}]')
     return processed_file_name
 
 

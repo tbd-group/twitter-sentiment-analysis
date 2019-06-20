@@ -2,11 +2,13 @@ import random
 import sys
 
 import numpy as np
-from sklearn.tree import DecisionTreeClassifier
+from scipy.sparse import lil_matrix
+from sklearn.feature_extraction.text import TfidfTransformer
+from xgboost import XGBClassifier
 
 import utils
 
-# Performs classification using Decision Tree.
+# Performs classification using XGBoost.
 
 
 if __name__ == '__main__':
@@ -21,7 +23,7 @@ if __name__ == '__main__':
         train_tweets = tweets
     del tweets
     print('Extracting features & training batches')
-    clf = DecisionTreeClassifier(max_depth=25)
+    clf = XGBClassifier(max_depth=25, silent=False, n_estimators=400)
     batch_size = len(train_tweets)
     i = 1
     n_train_batches = int(np.ceil(len(train_tweets) / float(batch_size)))
@@ -32,6 +34,7 @@ if __name__ == '__main__':
             tfidf = utils.apply_tf_idf(training_set_X)
             training_set_X = tfidf.transform(training_set_X)
         clf.fit(training_set_X, training_set_y)
+    print('\n')
     print('Testing')
     if utils.TRAIN:
         correct, total = 0, len(val_tweets)
@@ -45,7 +48,7 @@ if __name__ == '__main__':
             correct += np.sum(prediction == val_set_y)
             utils.write_status(i, n_val_batches)
             i += 1
-        print('Correct: %d/%d = %.4f %%' % (correct, total, correct * 100. / total))
+        print('\nCorrect: %d/%d = %.4f %%' % (correct, total, correct * 100. / total))
     else:
         del train_tweets
         test_tweets = utils.process_tweets(utils.TEST_PROCESSED_FILE, service_port, test_file=True)
@@ -62,5 +65,5 @@ if __name__ == '__main__':
             i += 1
         predictions = [(str(j), int(predictions[j]))
                        for j in range(len(test_tweets))]
-        utils.save_results_to_csv(predictions, 'decisiontree.csv')
-        print('Saved to decisiontree.csv')
+        utils.save_results_to_csv(predictions, 'xgboost.csv')
+        print('\nSaved to xgboost.csv')
