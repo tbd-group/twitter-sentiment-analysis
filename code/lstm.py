@@ -62,6 +62,7 @@ if __name__ == '__main__':
     train = len(sys.argv) == 2
     np.random.seed(1337)
     vocab_size = 90000
+    # batch_size = 128
     batch_size = 65536
     max_length = 40
     filters = 600
