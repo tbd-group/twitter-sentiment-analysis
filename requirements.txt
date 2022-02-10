@@ -33,7 +33,7 @@ scipy==1.3.0
 -e git+git@github.com:tbd-group/twitter-sentiment-analysis.git@d40afce406a7a8714bcc5eb442e075422bbce208#egg=sentient_analysis
 six==1.12.0
 tensorboard==1.13.1
-tensorflow==1.14.0rc1
+tensorflow==2.5.3
 tensorflow-estimator==1.14.0rc1
 termcolor==1.1.0
 traitlets==4.3.2
